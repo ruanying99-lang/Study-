@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Học Tiếng Trung Pro</title>
+    <!-- Thư viện đọc file Excel SheetJS -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <style>
+        /* --- GIAO DIỆN CHUNG --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body {
+            background-color: #2c3e50; 
+            background-image: url('duong-dan-anh-cua-ban.jpg'); 
+            background-size: cover; background-position: center; background-repeat: no-repeat; background-attachment: fixed;
+            min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px;
+        }
+        .game-container {
+            width: 100%; max-width: 650px; background-color: #FFFDE7; border: 4px solid #FBC02D;  
+            border-radius: 20px; padding: 30px; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4); color: #000000; font-size: 1.3rem; 
+        }
+        .menu-title { font-size: 1.8rem; font-weight: bold; text-align: center; margin-bottom: 25px; color: #000000; }
+        .screen { display: none; }
+        .screen.active { display: block !important; }
+
+        /* --- NÚT BẤM & Ô NHẬP --- */
+        .input-group { width: 100%; display: flex; flex-direction: column; gap: 15px; align-items: center; }
+        .name-input {
+            width: 100%; max-width: 350px; padding: 15px; font-size: 1.4rem; border: 3px solid #FBC02D;
+            border-radius: 10px; text-align: center; outline: none; color: #000000; background-color: #FFFFFF;
+        }
+        .btn {
+            width: 100%; padding: 16px; font-size: 1.3rem; font-weight: bold; color: #000000; background-color: #FFFFFF;
+            border: 3px solid #D4C492; border-radius: 12px; cursor: pointer; transition: all 0.2s; margin-bottom: 12px; text-align: center;
+            touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+        }
+        @media (hover: hover) { .btn:hover { background-color: #FFF9C4; transform: translateY(-2px); } }
+        .btn:active { transform: translateY(1px); }
+        .back-btn { background-color: #EEEEEE; border-color: #BDBDBD; margin-top: 15px; }
+
+        /* --- MÀN HÌNH CHỜ --- */
+        .loading-text { font-size: 2rem; font-weight: bold; text-align: center; color: #000000; margin: 40px 0; animation: pulse 1.2s infinite ease-in-out; }
+        @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; transform: scale(1.02); } }
+
+        /* --- GIAO DIỆN GAMEPLAY --- */
+        .score-board { display: flex; justify-content: space-between; font-size: 1.1rem; font-weight: bold; margin-bottom: 15px; border-bottom: 2px dashed #FBC02D; padding-bottom: 10px; }
+        .question-hint { font-size: 1rem; color: #555; text-align: center; margin-bottom: 5px; font-weight: bold; }
+        .question-box { font-size: 2.3rem; font-weight: bold; text-align: center; margin-bottom: 5px; line-height: 1.4; cursor: pointer; user-select: none; color: #1565C0; }
+        .pinyin-box { font-size: 1.4rem; text-align: center; color: #616161; margin-bottom: 15px; font-style: italic; }
+        .options-container { display: grid; grid-template-columns: 1fr; gap: 12px; }
+        @media (min-width: 480px) { .options-container { grid-template-columns: 1fr 1fr; } }
+        
+        /* Câu ví dụ */
+        .example-box {
+            background-color: #FFF9C4; border: 2px dashed #FBC02D; padding: 12px; border-radius: 8px;
+            margin-bottom: 15px; font-size: 1.2rem; text-align: center; display: none; line-height: 1.5;
+        }
+        .example-box span.highlight { color: #F44336; font-style: italic; font-weight: bold; }
+
+        /* --- BẢNG NHẬT KÝ ĐỎ NHẠT KHÔNG VIỀN --- */
+        .log-section { margin-top: 25px; padding-top: 15px; border-top: 2px dashed #FBC02D; }
+        .log-title { font-size: 1.3rem; font-weight: bold; text-align: center; margin-bottom: 10px; color: #c62828; }
+        .log-table { width: 100%; border-collapse: collapse; background-color: #FFEBEE; border-radius: 10px; overflow: hidden; font-size: 1.1rem; }
+        .log-table th, .log-table td { padding: 12px; text-align: center; border: none; }
+        .log-table th { background-color: #FFCDD2; color: #b71c1c; font-weight: bold; }
+        .log-table tr:nth-child(even) { background-color: #FFCDD2; opacity: 0.8; }
+        .log-empty { text-align: center; padding: 15px; color: #e57373; font-style: italic; font-size: 1rem; }
+
+        /* --- SỔ TỪ VỰNG & QUẢN LÝ XÓA --- */
+        .vocab-actions { display: flex; gap: 10px; margin-bottom: 15px; }
+        .btn-sm { padding: 8px 12px; font-size: 1rem; margin-bottom: 0; width: auto; flex: 1; }
+        .vocab-list-container { max-height: 320px; overflow-y: auto; margin-bottom: 15px; padding-right: 5px; }
+        .vocab-item {
+            background: #FFFFFF; padding: 12px; border-radius: 8px; margin-bottom: 10px;
+            border-left: 5px solid #FBC02D; font-size: 1.1rem; display: flex; align-items: center; gap: 10px;
+        }
+        .vocab-item.status-learned { border-left-color: #4CAF50; }
+        .vocab-details { flex-grow: 1; }
+        .status-badge { font-size: 0.8rem; padding: 2px 6px; border-radius: 10px; font-weight: bold; margin-left: 5px; }
+
+        /* --- MÀN HÌNH TỔNG KẾT & CHỌN TỪ ĐÃ HỌC --- */
+        .summary-list { max-height: 300px; overflow-y: auto; margin: 15px 0; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ddd; }
+        .summary-item { display: flex; align-items: center; gap: 12px; padding: 8px; border-bottom: 1px solid #eee; font-size: 1.1rem; border-radius: 6px; margin-bottom: 4px; }
+        .summary-item:last-child { border-bottom: none; }
+
+        /* --- HIỆU ỨNG NHẤP NHÁY --- */
+        @keyframes blink-green { 0%, 100% { background-color: #FFFFFF; } 50% { background-color: #4CAF50; color: white; } }
+        @keyframes blink-red { 0%, 100% { background-color: #FFFFFF; } 50% { background-color: #F44336; color: white; } }
+        .correct-blink { animation: blink-green 0.3s ease-in-out 3; }
+        .wrong-blink { animation: blink-red 0.3s ease-in-out 3; }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        
+        <!-- MÀN HÌNH 1: NHẬP TÊN -->
+        <div id="screen-login" class="screen active">
+            <div class="menu-title">CHÀO MỪNG ĐẾN VỚI GAME HỌC TIẾNG TRUNG</div>
+            <div class="input-group">
+                <input type="text" id="player-name" class="name-input" placeholder="Nhập tên của bạn..." autocomplete="off">
+                <button class="btn" style="background-color: #FFF9C4;" onclick="submitName()">XÁC NHẬN</button>
+            </div>
+        </div>
+
+        <!-- MÀN HÌNH 2: MENU CHÍNH -->
+        <div id="screen-menu" class="screen">
+            <div class="menu-title" id="welcome-text">Xin chào!</div>
+            <button class="btn" onclick="autoStartSmartGame()">🎮 BẮT ĐẦU CHƠI</button>
+            <button class="btn" onclick="showScreen('screen-vocab-options')">📖 SỔ TỪ VỰNG</button>
+            
+            <input type="file" id="excel-file-input" accept=".xlsx, .xls" style="display: none;" onchange="handleExcelUpload(event)">
+            <button class="btn" style="background-color: #FFF9C4;" onclick="document.getElementById('excel-file-input').click()">📥 NẠP TỪ VỰNG</button>
+            
+            <!-- MỤC NHẬT KÝ LUYỆN TẬP -->
+            <div class="log-section">
+                <div class="log-title">📊 NHẬT KÝ LUYỆN TẬP</div>
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>Tên</th>
+                            <th>Ngày</th>
+                            <th>Số từ vựng</th>
+                        </tr>
+                    </thead>
+                    <tbody id="log-table-body">
+                        <!-- Dữ liệu nhật ký sẽ tự chèn vào đây -->
+                    </tbody>
+                </table>
+                <div id="log-empty-msg" class="log-empty">Chưa có lượt học nào được ghi nhận hôm nay.</div>
+            </div>
+        </div>
+
+        <!-- MÀN HÌNH 4: TÙY CHỌN SỔ TỪ VỰNG -->
+        <div id="screen-vocab-options" class="screen">
+            <div class="menu-title">XEM SỔ TỪ VỰNG</div>
+            <button class="btn" onclick="viewVocab('all')">🌐 Tất Cả Các Từ Vựng</button>
+            <button class="btn" onclick="viewVocab('new')">🆕 Từ Mới</button>
+            <button class="btn" onclick="viewVocab('learned')">✅ Từ Đã Học</button>
+            <button class="btn back-btn" onclick="showScreen('screen-menu')">⬅️ Quay Lại Menu</button>
+        </div>
+
+        <!-- MÀN HÌNH CHI TIẾT SỔ TỪ VỰNG -->
+        <div id="screen-vocab-list" class="screen">
+            <div class="menu-title" id="vocab-list-title">DANH SÁCH TỪ VỰNG</div>
+            <div class="vocab-actions">
+                <button class="btn btn-sm" style="background-color: #FFE082;" onclick="toggleSelectAllVocab()">Chọn tất cả</button>
+                <button class="btn btn-sm" style="background-color: #EF5350; color: white;" onclick="deleteSelectedVocab()">Xóa mục chọn</button>
+                <button class="btn btn-sm" style="background-color: #b71c1c; color: white;" onclick="deleteAllVocabMode()">Xóa tất cả</button>
+            </div>
+            <div class="vocab-list-container" id="vocab-list-content"></div>
+            <button class="btn back-btn" onclick="showScreen('screen-vocab-options')">⬅️ Quay Lại</button>
+        </div>
+
+        <!-- MÀN HÌNH CHỜ (LOADING) -->
+        <div id="screen-loading" class="screen">
+            <div class="loading-text">⏳ Chờ giây lát...</div>
+        </div>
+
+        <!-- MÀN HÌNH 5: KHUNG CHƠI GAME CHÍNH -->
+        <div id="screen-gameplay" class="screen">
+            <div class="score-board">
+                <div>👤: <span id="display-name" style="color: #795548;"></span></div>
+                <div>Câu: <span id="current-q-index" style="color: #0288D1;">0</span>/50</div>
+                <div>🏆: <span id="score" style="color: #E65100;">0</span></div>
+            </div>
+            
+            <div class="question-hint" id="question-type-hint">Nhìn chữ Hán chọn nghĩa</div>
+            <div class="question-box" id="question-main" onclick="toggleExampleDisplay()">--</div>
+            <div class="pinyin-box" id="question-sub">(--)</div>
+
+            <!-- Khung hiển thị câu ví dụ -->
+            <div class="example-box" id="example-display-box"></div>
+
+            <div class="options-container" id="options-box"></div>
+            <button class="btn back-btn" onclick="showScreen('screen-menu')" style="margin-top: 20px;">📴 Thoát Game</button>
+        </div>
+
+        <!-- MÀN HÌNH 6: TỔNG KẾT VÀ LỰA CHỌN CHUYỂN TRẠNG THÁI -->
+        <div id="screen-summary" class="screen">
+            <div class="menu-title">KẾT QUẢ LƯỢT CHƠI</div>
+            <div style="text-align: center; font-weight: bold; margin-bottom: 10px;" id="summary-score-text">Bạn đạt: 0/50 câu đúng</div>
+            <p style="font-size: 1.1rem; color: #555; text-align: center; margin-bottom: 10px;">💡 Tích chọn các từ bạn muốn chuyển sang <b>"Từ đã học"</b>:</p>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <button class="btn btn-sm" style="background-color: #FFF9C4;" onclick="selectSummaryAll(true)">Chọn hết</button>
+                <button class="btn btn-sm" style="background-color: #EEEEEE;" onclick="selectSummaryAll(false)">Bỏ chọn hết</button>
+            </div>
+
+            <div class="summary-list" id="summary-list-content"></div>
+
+            <button class="btn" style="background-color: #4CAF50; color: white;" onclick="submitSummaryChanges()">💾 XÁC NHẬN & VỀ MENU</button>
+        </div>
+
+    </div>
+
+    <script>
+        // Kho dữ liệu ban đầu và mảng lưu nhật ký hằng ngày
+        let vocabulary = [
+            { chinese: "苹果", pinyin: "píngguǒ", Vietnamese: "Quả táo", example: "我喜欢吃苹果。", learned: false },
+            { chinese: "谢谢", pinyin: "xièxie", Vietnamese: "Cảm ơn", example: "谢谢你的帮助！", learned: false },
+            { chinese: "再见", pinyin: "zàijiàn", Vietnamese: "Tạm biệt", example: "老师，再见！", learned: false },
+            { chinese: "咖啡", pinyin: "kāfēi", Vietnamese: "Cà phê", example: "你要喝咖啡吗？", learned: false },
+            { chinese: "面包", pinyin: "miànbāo", Vietnamese: "Bánh mì", example: "早饭我吃面包。", learned: false }
+        ];
+
+        let studyLogs = []; // Mảng chứa nhật ký luyện tập
+        let currentPlayerName = "Người chơi";
+        let gameQuestions = [];  
+        let currentQuestionIndex = 0;
+        let currentScore = 0;
+        let currentCorrectWord = null; 
+        let currentQType = 1; 
+        let playedWordsInTurn = []; 
+        let currentVocabViewMode = 'all';
+        let wordPerformanceTracker = {};
+
+        const toneMap = {
+            'a': ['ā', 'á', 'ǎ', 'à'], 'e': ['ē', 'é', 'ě', 'è'], 'i': ['ī', 'í', 'ǐ', 'ì'],
+            'o': ['ō', 'ó', 'ǒ', 'ò'], 'u': ['ū', 'ú', 'ǔ', 'ù'], 'ü': ['ǖ', 'ǘ', 'ǚ', 'ǜ'],
+            'ā': ['ā', 'á', 'ǎ', 'à'], 'á': ['ā', 'á', 'ǎ', 'à'], 'ǎ': ['ā', 'á', 'ǎ', 'à'], 'à': ['ā', 'á', 'ǎ', 'à'],
+            'ē': ['ē', 'é', 'ě', 'è'], 'é': ['ē', 'é', 'ě', 'è'], 'ě': ['ē', 'é', 'ě', 'è'], 'è': ['ē', 'é', 'ě', 'è'],
+            'ī': ['ī', 'í', 'ǐ', 'ì'], 'í': ['ī', 'í', 'ǐ', 'ì'], 'ǐ': ['ī', 'í', 'ǐ', 'ì'], 'ì': ['ī', 'í', 'ǐ', 'ì'],
+            'ō': ['ō', 'ó', 'ǒ', 'ò'], 'ó': ['ō', 'ó', 'ǒ', 'ò'], 'ǒ': ['ō', 'ó', 'ǒ', 'ò'], 'ò': ['ō', 'ó', 'ǒ', 'ò'],
+            'ū': ['ū', 'ú', 'ǔ', 'ù'], 'ú': ['ū', 'ú', 'ǔ', 'ù'], 'ǔ': ['ū', 'ú', 'ǔ', 'ù'], 'ù': ['ū', 'ú', 'ǔ', 'ù'],
+            'ǖ': ['ǖ', 'ǘ', 'ǚ', 'ǜ'], 'ǘ': ['ǖ', 'ǘ', 'ǚ', 'ǜ'], 'ǚ': ['ǖ', 'ǘ', 'ǚ', 'ǜ'], 'ǜ': ['ǖ', 'ǘ', 'ǚ', 'ǜ']
+        };
+
+        function showScreen(screenId) {
+            const screens = document.querySelectorAll('.screen');
+            screens.forEach(s => s.classList.remove('active'));
+            const targetScreen = document.getElementById(screenId);
+            if (targetScreen) targetScreen.classList.add('active');
+        }
+
+        function submitName() {
+            const nameField = document.getElementById('player-name');
+            const nameInput = nameField.value.trim();
+            if (nameInput === "") { nameField.style.borderColor = '#F44336'; return; }
+            nameField.style.borderColor = '#FBC02D';
+            currentPlayerName = nameInput;
+            document.getElementById('welcome-text').innerText = `Xin chào, ${nameInput}! 👋`;
+            document.getElementById('display-name').innerText = nameInput;
+            showScreen('screen-menu');
+            renderLogTable();
+        }
+
+        // --- NẠP FILE EXCEL ---
+        function handleExcelUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            showScreen('screen-loading');
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    if (jsonData.length === 0) { alert("File trống!"); showScreen('screen-menu'); return; }
+                    let addedCount = 0, duplicateCount = 0;
+                    jsonData.forEach(row => {
+                        const chinese = String(row.chinese || row.Chinese || "").trim();
+                        const pinyin = String(row.pinyin || row.Pinyin || "").trim();
+                        const Vietnamese = String(row.vietnamese || row.Vietnamese || row.vietnam || "").trim();
+                        const example = String(row.example || row.Example || row.vidu || "").trim();
+                        if (chinese && pinyin && Vietnamese) {
+                            const isDuplicate = vocabulary.some(word => 
+                                word.chinese.toLowerCase() === chinese.toLowerCase() &&
+                                word.pinyin.toLowerCase() === pinyin.toLowerCase() &&
+                                word.Vietnamese.toLowerCase() === Vietnamese.toLowerCase()
+                            );
+                            if (!isDuplicate) {
+                                vocabulary.push({ chinese, pinyin, Vietnamese, example: example || "", learned: false });
+                                addedCount++;
+                            } else { duplicateCount++; }
+                        }
+                    });
+                    alert(`🎉 Thành công! Đã nạp thêm ${addedCount} từ vựng.\n🚫 Bỏ qua ${duplicateCount} từ bị trùng hoàn toàn.`);
+                } catch (error) { alert("Có lỗi xảy ra khi đọc file Excel!"); }
+                event.target.value = '';
+                showScreen('screen-menu');
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // --- HÀM TỰ ĐỘNG SINH ĐÁP ÁN NHIỄU SAI THANH ĐIỆU ---
+        function generateToneFakeOptions(correctPinyin) {
+            let fakes = new Set();
+            let chars = Array.from(correctPinyin);
+            let targetIndices = [];
+            chars.forEach((c, idx) => { if (toneMap[c.toLowerCase()]) { targetIndices.push(idx); } });
+
+            if (targetIndices.length === 0) { return [correctPinyin + "ā", correctPinyin + "á", correctPinyin + "à"]; }
+
+            for (let i = 0; i < 40; i++) {
+                let tempChars = [...chars];
+                let changeCount = Math.random() > 0.6 ? 2 : 1;
+                for(let k=0; k<changeCount; k++) {
+                    let randIdx = targetIndices[Math.floor(Math.random() * targetIndices.length)];
+                    let currentLetter = tempChars[randIdx].toLowerCase();
+                    let availableTones = toneMap[currentLetter];
+                    let newTone = availableTones[Math.floor(Math.random() * availableTones.length)];
+                    tempChars[randIdx] = tempChars[randIdx] === tempChars[randIdx].toUpperCase() ? newTone.toUpperCase() : newTone;
+                }
+                let candidate = tempChars.join("");
+                if (candidate.toLowerCase() !== correctPinyin.toLowerCase()) { fakes.add(candidate); }
+                if (fakes.size >= 3) break;
+            }
+
+            let fakeList = Array.from(fakes);
+            let backupTones = ["1", "2", "3", "4"];
+            while(fakeList.length < 3) {
+                let randomTone = backupTones[fakeList.length % backupTones.length];
+                fakeList.push(correctPinyin + randomTone);
+            }
+            return fakeList.slice(0, 3);
+        }
+
+        // --- CHẾ ĐỘ CHƠI: LƯỢT 50 CÂU (TỐI ĐA 15 TỪ MỚI) ---
+        function autoStartSmartGame() {
+            if (vocabulary.length === 0) { alert("Hệ thống chưa có dữ liệu từ vựng! Vui lòng nạp file Excel trước."); return; }
+
+            let newWordsPool = vocabulary.filter(w => !w.learned);
+            let learnedWordsPool = vocabulary.filter(w => w.learned);
+
+            newWordsPool.sort(() => Math.random() - 0.5);
+            let selectedWords = newWordsPool.slice(0, 15);
+
+            if (selectedWords.length < 50) {
+                learnedWordsPool.sort(() => Math.random() - 0.5);
+                let neededCount = 50 - selectedWords.length;
+                let extraWords = learnedWordsPool.slice(0, neededCount);
+                selectedWords = selectedWords.concat(extraWords);
+            }
+
+            playedWordsInTurn = [...selectedWords]; 
+            
+            wordPerformanceTracker = {};
+            playedWordsInTurn.forEach(w => {
+                let key = `${w.chinese}_${w.pinyin}`;
+                wordPerformanceTracker[key] = { isNewWord: !w.learned, totalQuestions: 0, correctQuestions: 0 };
+            });
+
+            gameQuestions = [];
+            while(gameQuestions.length < 50 && selectedWords.length > 0) {
+                selectedWords.forEach(word => { if(gameQuestions.length < 50) gameQuestions.push({ ...word }); });
+            }
+
+            gameQuestions.forEach((q, idx) => {
+                if (idx < 18) q.type = 1;
+                else if (idx < 35) q.type = 2;
+                else q.type = 3;
+            });
+
+            gameQuestions.sort(() => Math.random() - 0.5);
+            currentQuestionIndex = 0;
+            currentScore = 0;
+            document.getElementById('score').innerText = currentScore;
+            showScreen('screen-gameplay');
+            loadNextQuestion();
+        }
+
+        // --- HIỂN THỊ CÂU HỎI VÀ ĐÁP ÁN ---
+        function loadNextQuestion() {
+            document.getElementById('example-display-box').style.display = 'none';
+            if (currentQuestionIndex >= gameQuestions.length) { endGameTurn(); return; }
+
+            document.getElementById('current-q-index').innerText = currentQuestionIndex + 1;
+            currentCorrectWord = gameQuestions[currentQuestionIndex];
+            currentQType = currentCorrectWord.type;
+
+            let trackerKey = `${currentCorrectWord.chinese}_${currentCorrectWord.pinyin}`;
+            if(wordPerformanceTracker[trackerKey]) wordPerformanceTracker[trackerKey].totalQuestions += 1;
+
+            let options = [];
+            const optionsBox = document.getElementById('options-box');
+            optionsBox.innerHTML = '';
+
+            if (currentQType === 1) {
+                document.getElementById('question-type-hint').innerText = "💡 Nhấp vào chữ Hán để xem câu ví dụ:";
+                document.getElementById('question-main').innerText = currentCorrectWord.chinese;
+                document.getElementById('question-sub').innerText = `( Phiên âm: ${currentCorrectWord.pinyin} )`;
+                document.getElementById('question-main').style.cursor = "pointer";
+                options.push(currentCorrectWord.Vietnamese);
+                let wrong = vocabulary.filter(w => w.Vietnamese !== currentCorrectWord.Vietnamese).map(w => w.Vietnamese);
+                wrong.sort(() => Math.random() - 0.5);
+                for(let i=0; i<3 && i<wrong.length; i++) options.push(wrong[i]);
+            } else if (currentQType === 2) {
+                document.getElementById('question-type-hint').innerText = "💡 Chọn chữ Hán tương ứng với nghĩa:";
+                document.getElementById('question-main').innerText = currentCorrectWord.Vietnamese;
+                document.getElementById('question-sub').innerText = "";
+                document.getElementById('question-main').style.cursor = "default";
+                options.push(currentCorrectWord.chinese);
+                let wrong = vocabulary.filter(w => w.chinese !== currentCorrectWord.chinese).map(w => w.chinese);
+                wrong.sort(() => Math.random() - 0.5);
+                for(let i=0; i<3 && i<wrong.length; i++) options.push(wrong[i]);
+            } else if (currentQType === 3) {
+                document.getElementById('question-type-hint').innerText = "⚡🎯 Thử thách thanh điệu! Chọn phiên âm PINYIN chính xác nhất:";
+                document.getElementById('question-main').innerText = `${currentCorrectWord.chinese} (${currentCorrectWord.Vietnamese})`;
+                document.getElementById('question-sub').innerText = "(Chú ý kỹ các dấu thanh điệu ā á ǎ à)";
+                document.getElementById('question-main').style.cursor = "default";
+                options.push(currentCorrectWord.pinyin); 
+                let fakeTones = generateToneFakeOptions(currentCorrectWord.pinyin);
+                fakeTones.forEach(f => options.push(f));
+            }
+
+            options.sort(() => Math.random() - 0.5);
+            const prefixes = ['A. ', 'B. ', 'C. ', 'D. '];
+            options.forEach((opt, index) => {
+                let isCorrect = (currentQType === 1) ? (opt === currentCorrectWord.Vietnamese) : ((currentQType === 2) ? (opt === currentCorrectWord.chinese) : (opt === currentCorrectWord.pinyin));
+                const button = document.createElement('button');
+                button.className = 'btn';
+                button.innerText = `${prefixes[index]}${opt}`;
+                button.onclick = function() { checkAnswer(this, isCorrect); };
+                optionsBox.appendChild(button);
+            });
+        }
+
+        function toggleExampleDisplay() {
+            if (currentQType !== 1) return; 
+            const box = document.getElementById('example-display-box');
+            if (box.style.display === 'block') { box.style.display = 'none'; return; }
+            if (!currentCorrectWord.example) { box.innerHTML = "❌ Chưa có câu ví dụ."; box.style.display = 'block'; return; }
+            let exText = currentCorrectWord.example, key = currentCorrectWord.chinese;
+            if (exText.includes(key)) exText = exText.replace(new RegExp(key, "g"), `<span class="highlight">${key}</span>`);
+            box.innerHTML = `<b>Ví dụ:</b> ${exText}`; box.style.display = 'block';
+        }
+
+        function checkAnswer(button, isCorrect) {
+            document.querySelectorAll('#options-box .btn').forEach(btn => btn.style.pointerEvents = 'none');
+            let trackerKey = `${currentCorrectWord.chinese}_${currentCorrectWord.pinyin}`;
+            if (isCorrect) {
+                button.classList.add('correct-blink'); currentScore += 1; document.getElementById('score').innerText = currentScore;
+                if(wordPerformanceTracker[trackerKey]) wordPerformanceTracker[trackerKey].correctQuestions += 1;
+            } else { button.classList.add('wrong-blink'); }
+            setTimeout(() => { currentQuestionIndex++; loadNextQuestion(); }, 900);
+        }
+
+        // --- KẾT THÚC GAME & TỔNG KẾT ---
+        function endGameTurn() {
+            showScreen('screen-summary');
+            document.getElementById('summary-score-text').innerText = `Bạn đạt: ${currentScore}/${gameQuestions.length} câu đúng`;
+            const container = document.getElementById('summary-list-content');
+            container.innerHTML = '';
+
+            let uniquePlayedWords = [];
+            playedWordsInTurn.forEach(w => { if(!uniquePlayedWords.some(x => x.chinese === w.chinese)) uniquePlayedWords.push(w); });
+
+            uniquePlayedWords.forEach((word, idx) => {
+                const item = document.createElement('div');
+                item.className = 'summary-item';
+                let trackerKey = `${word.chinese}_${word.pinyin}`, stats = wordPerformanceTracker[trackerKey];
+                let isPerfectNewWord = stats && stats.isNewWord && stats.totalQuestions > 0 && stats.correctQuestions === stats.totalQuestions;
+
+                if (isPerfectNewWord) { item.style.backgroundColor = '#C8E6C9'; item.style.border = '2px solid #4CAF50'; }
+                else { item.style.backgroundColor = '#FFFFFF'; item.style.border = '1px solid #eee'; }
+
+                const originalIndex = vocabulary.findIndex(v => v.chinese === word.chinese && v.pinyin === word.pinyin);
+                item.innerHTML = `
+                    <input type="checkbox" style="margin-left:10px;" id="sum-chk-${idx}" data-origin-idx="${originalIndex}" ${word.learned || isPerfectNewWord ? 'checked' : ''}>
+                    <label style="cursor:pointer; padding: 12px; flex-grow:1; display:flex; align-items:center; justify-content:between;" for="sum-chk-${idx}">
+                        <div><strong>${word.chinese}</strong> [${word.pinyin}] - ${word.Vietnamese}</div>
+                        <span style="font-size:0.8rem; margin-left:auto; padding:2px 7px; border-radius:5px; background-color:${word.learned ? '#E8F5E9;color:#4CAF50':(isPerfectNewWord ? '#2E7D32;color:white;font-weight:bold;':'#FFF3E0;color:#FB8C00')}">
+                            ${word.learned ? 'Đã học' : (isPerfectNewWord ? 'Từ mới - Đúng hết!' : 'Từ mới gốc')}
+                        </span>
+                    </label>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function selectSummaryAll(status) { document.querySelectorAll('#summary-list-content input[type="checkbox"]').forEach(c => c.checked = status); }
+
+        // --- XÁC NHẬN KẾT QUẢ VÀ GHI NHẬT KÝ ---
+        function submitSummaryChanges() {
+            document.querySelectorAll('#summary-list-content input[type="checkbox"]').forEach(c => {
+                const idx = parseInt(c.getAttribute('data-origin-idx'));
+                if (idx >= 0 && idx < vocabulary.length) { vocabulary[idx].learned = c.checked; }
+            });
+
+            // Lấy danh sách số lượng từ vựng duy nhất xuất hiện trong lượt chơi
+            let uniqueWordsCount = new Set(playedWordsInTurn.map(w => w.chinese)).size;
+
+            // Lấy thời gian hiện tại
+            let now = new Date();
+            let timeString = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+            // Lưu vào mảng nhật ký đầu chuỗi để lượt mới nhất lên trên cùng
+            studyLogs.unshift({
+                name: currentPlayerName,
+                date: timeString,
+                count: uniqueWordsCount
+            });
+
+            alert("💾 Đã cập nhật trạng thái sổ từ vựng và ghi nhận nhật ký học tập!");
+            showScreen('screen-menu');
+            renderLogTable(); // Cập nhật lại bảng hiển thị ở Menu chính
+        }
+
+        // --- RENDER BẢNG NHẬT KÝ ĐỎ NHẠT KHÔNG VIỀN ---
+        function renderLogTable() {
+            const tbody = document.getElementById('log-table-body');
+            const emptyMsg = document.getElementById('log-empty-msg');
+            tbody.innerHTML = '';
+
+            if (studyLogs.length === 0) {
+                emptyMsg.style.display = 'block';
+                return;
+            }
+            emptyMsg.style.display = 'none';
+
+            studyLogs.forEach(log => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${log.name}</td>
+                    <td>${log.date}</td>
+                    <td>${log.count} từ</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // --- QUẢN LÝ SỔ TỪ VỰNG ---
+        function viewVocab(mode) {
+            currentVocabViewMode = mode; showScreen('screen-loading'); renderVocabList();
+            setTimeout(() => { showScreen('screen-vocab-list'); }, 800);
+        }
+
+        function renderVocabList() {
+            let filteredVocab = [];
+            if (currentVocabViewMode === 'all') { filteredVocab = [...vocabulary]; document.getElementById('vocab-list-title').innerText = "TẤT CẢ TỪ VỰNG"; }
+            else if (currentVocabViewMode === 'new') { filteredVocab = vocabulary.filter(w => !w.learned); document.getElementById('vocab-list-title').innerText = "TỪ VỰNG MỚI"; }
+            else if (currentVocabViewMode === 'learned') { filteredVocab = vocabulary.filter(w => w.learned); document.getElementById('vocab-list-title').innerText = "TỪ VỰNG ĐÃ HỌC"; }
+
+            const container = document.getElementById('vocab-list-content'); container.innerHTML = '';
+            if (filteredVocab.length === 0) { container.innerHTML = '<div style="text-align:center; padding: 20px; color:#757575;">Danh sách trống.</div>'; return; }
+
+            filteredVocab.forEach((w) => {
+                const globalIdx = vocabulary.findIndex(v => v.chinese === w.chinese && v.pinyin === w.pinyin && v.Vietnamese === w.Vietnamese);
+                const item = document.createElement('div');
+                item.className = `vocab-item ${w.learned ? 'status-learned' : ''}`;
+                item.innerHTML = `
+                    <input type="checkbox" class="vocab-select-chk" data-global-idx="${globalIdx}">
+                    <div class="vocab-details">
+                        <strong>${w.chinese}</strong> [${w.pinyin}] : ${w.Vietnamese}
+                        <span class="status-badge" style="background-color: ${w.learned ? '#E8F5E9; color: #4CAF50;' : '#FFF3E0; color: #FB8C00;'}">
+                            ${w.learned ? 'Đã học' : 'Từ mới'}
+                        </span>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function toggleSelectAllVocab() {
+            const chks = document.querySelectorAll('.vocab-select-chk');
+            if (chks.length === 0) return;
+            const allChecked = Array.from(chks).every(c => c.checked);
+            chks.forEach(c => c.checked = !allChecked);
+        }
+
+        function deleteSelectedVocab() {
+            const chks = document.querySelectorAll('.vocab-select-chk:checked');
+            if (chks.length === 0) { alert("Vui lòng chọn ít nhất một từ để xóa!"); return; }
+            if (confirm(`Bạn có chắc chắn muốn xóa ${chks.length} mục đã chọn không?`)) {
+                let indicesToDelete = Array.from(chks).map(c => parseInt(c.getAttribute('data-global-idx')));
+                indicesToDelete.sort((a, b) => b - a);
+                indicesToDelete.forEach(idx => { if (idx >= 0 && idx < vocabulary.length) vocabulary.splice(idx, 1); });
+                alert("❌ Đã xóa thành công."); renderVocabList(); 
+            }
+        }
+
+        function deleteAllVocabMode() {
+            if (currentVocabViewMode === 'all') { if (confirm("⚠️ Xóa SẠCH TOÀN BỘ kho từ vựng?")) { vocabulary = []; renderVocabList(); } }
+            else if (currentVocabViewMode === 'new') { if (confirm("Xóa TOÀN BỘ các 'Từ mới'?")) { vocabulary = vocabulary.filter(w => w.learned); renderVocabList(); } }
+            else if (currentVocabViewMode === 'learned') { if (confirm("Xóa TOÀN BỘ các 'Từ đã học'?")) { vocabulary = vocabulary.filter(w => !w.learned); renderVocabList(); } }
+        }
+    </script>
+</body>
+</html>
